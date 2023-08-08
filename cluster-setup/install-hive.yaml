@@ -1,0 +1,98 @@
+---
+- name: Install Apache Hive
+  hosts: hadoop-nodes  # Replace 'hadoop-nodes' with the group name or IP/hostname of your target machine.
+  become: true
+  vars:
+    hive_version: "3.1.2"  # Change this to the desired Hive version
+    hive_install_path: "/opt/hive"
+    hive_download_url: "https://downloads.apache.org/hive/hive-{{ hive_version }}/apache-hive-{{ hive_version }}-bin.tar.gz"
+    hadoop_home: "/opt/hadoop/hadoop-3.3.1"  # Set this to the path of your Hadoop installation
+  tasks:
+    - name: Install Java (Assuming OpenJDK)
+      apt:
+        name: openjdk-8-jdk
+        state: present
+      become: yes
+      become_user: root
+
+    - name: Create Hive Install Directory
+      file:
+        path: "{{ hive_install_path }}"
+        state: directory
+        mode: '0755'
+      become: yes
+      become_user: root
+
+    - name: Download Hive Distribution
+      get_url:
+        url: "{{ hive_download_url }}"
+        dest: "{{ hive_install_path }}/hive-{{ hive_version }}.tar.gz"
+      become: yes
+      become_user: root
+
+    - name: Extract Hive Archive
+      unarchive:
+        src: "{{ hive_install_path }}/hive-{{ hive_version }}.tar.gz"
+        dest: "{{ hive_install_path }}"
+        remote_src: yes
+        creates: "{{ hive_install_path }}/apache-hive-{{ hive_version }}-bin"
+      become: yes
+      become_user: root
+
+    - name: Set Hive Environment Variables
+      lineinfile:
+        path: /etc/environment
+        line: 'export HIVE_HOME="{{ hive_install_path }}/apache-hive-{{ hive_version }}-bin"'
+      become: yes
+      become_user: root
+
+    - name: Add Hive Binaries to PATH
+      lineinfile:
+        path: /etc/environment
+        line: 'export PATH="$PATH:$HIVE_HOME/bin"'
+      become: yes
+      become_user: root
+
+    - name: Update Environment Variables
+      shell: |
+        source /etc/environment
+      become: yes
+      become_user: root
+
+    - name: Copy Hive Configuration
+      copy:
+        src: "{{ item }}"
+        dest: "{{ hive_install_path }}/apache-hive-{{ hive_version }}-bin/conf/{{ item }}"
+      with_items:
+        - hive-env.sh
+        - hive-site.xml
+      become: yes
+      become_user: root
+
+    - name: Configure Hadoop Environment for Hive
+      lineinfile:
+        path: "{{ hadoop_home }}/etc/hadoop/hadoop-env.sh"
+        line: 'export HADOOP_HOME="{{ hadoop_home }}"'
+      become: yes
+      become_user: root
+
+    - name: Create Hive Metastore Warehouse Directory
+      file:
+        path: "/user/hive/warehouse"
+        state: directory
+        mode: '0755'
+        owner: 'hive'
+        group: 'hadoop'
+      become: yes
+      become_user: root
+
+    - name: Set Hive Metastore Permissions
+      file:
+        path: "{{ hive_install_path }}/apache-hive-{{ hive_version }}-bin"
+        state: directory
+        recurse: yes
+        mode: '0755'
+        owner: 'hive'
+        group: 'hadoop'
+      become: yes
+      become_user: root

@@ -1,0 +1,81 @@
+---
+- name: Install Apache Hadoop
+  hosts: hadoop-nodes
+  become: true
+  vars:
+    hadoop_version: "3.3.1"  # Change this to the desired Hadoop version
+    hadoop_install_path: "/opt/hadoop"
+    hadoop_download_url: "https://downloads.apache.org/hadoop/common/hadoop-{{ hadoop_version }}/hadoop-{{ hadoop_version }}.tar.gz"
+  tasks:
+    - name: Install Java (Assuming OpenJDK)
+      apt:
+        name: openjdk-8-jdk
+        state: present
+      become: yes
+      become_user: root
+
+    - name: Create Hadoop Install Directory
+      file:
+        path: "{{ hadoop_install_path }}"
+        state: directory
+        mode: '0755'
+      become: yes
+      become_user: root
+
+    - name: Download Hadoop Distribution
+      get_url:
+        url: "{{ hadoop_download_url }}"
+        dest: "{{ hadoop_install_path }}/hadoop-{{ hadoop_version }}.tar.gz"
+      become: yes
+      become_user: root
+
+    - name: Extract Hadoop Archive
+      unarchive:
+        src: "{{ hadoop_install_path }}/hadoop-{{ hadoop_version }}.tar.gz"
+        dest: "{{ hadoop_install_path }}"
+        remote_src: yes
+        creates: "{{ hadoop_install_path }}/hadoop-{{ hadoop_version }}"
+      become: yes
+      become_user: root
+
+    - name: Set Hadoop Environment Variables
+      lineinfile:
+        path: /etc/environment
+        line: 'export HADOOP_HOME="{{ hadoop_install_path }}/hadoop-{{ hadoop_version }}"'
+      become: yes
+      become_user: root
+
+    - name: Add Hadoop Binaries to PATH
+      lineinfile:
+        path: /etc/environment
+        line: 'export PATH="$PATH:$HADOOP_HOME/bin"'
+      become: yes
+      become_user: root
+
+    - name: Update Environment Variables
+      shell: |
+        source /etc/environment
+      become: yes
+      become_user: root
+
+    - name: Update Hadoop Configuration
+      copy:
+        src: "{{ item }}"
+        dest: "{{ hadoop_install_path }}/hadoop-{{ hadoop_version }}/etc/hadoop/{{ item }}"
+      with_items:
+        - core-site.xml
+        - hdfs-site.xml
+        - mapred-site.xml
+        - yarn-site.xml
+      become: yes
+      become_user: root
+
+    - name: Format Hadoop NameNode (Optional)
+      shell: "{{ hadoop_install_path }}/hadoop-{{ hadoop_version }}/bin/hdfs namenode -format -nonInteractive"
+      become: yes
+      become_user: root
+
+    - name: Start Hadoop Services
+      shell: "{{ hadoop_install_path }}/hadoop-{{ hadoop_version }}/sbin/start-all.sh"
+      become: yes
+      become_user: root
